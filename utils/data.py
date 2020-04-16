@@ -1,15 +1,15 @@
-from torch.utils.data import Dataset
+import torch.utils.data
 from typing import Union, List, Tuple
-from numpy import ndarray
 import torch
-from torchvision.transforms import transforms
+import numpy
+import torchvision
 
 
-class new_dataset(Dataset):
+class new_dataset(torch.utils.data.Dataset):
     def __init__(self,
-                 x: Union[torch.Tensor, ndarray,List, Tuple, float],
-                 y: Union[torch.Tensor, ndarray, List, Tuple, float] = None,
-                 transform: transforms = None
+                 x: Union[torch.Tensor, numpy.ndarray,List, Tuple, float],
+                 y: Union[torch.Tensor, numpy.ndarray, List, Tuple, float] = None,
+                 transform: torchvision.transforms = None
                  ):
         self.x = x
         self.y = y
@@ -28,7 +28,3 @@ class new_dataset(Dataset):
         if self.transform is not None:
             x = self.transform(x)
         return x, y
-
-
-
-

@@ -1,32 +1,31 @@
 from typing import List, Union
-from torch.utils.data import Dataset, DataLoader
-from numpy import ndarray
+import torch.utils.data
+import numpy
 from torch.optim.optimizer import Optimizer
-from torch.nn import Module
-from torchvision.transforms import transforms
+import torch
+import torchvision
 from .utils.data import new_dataset
 from .utils.toolkit import *
-import torch
 import warnings
 import time
 
 
-def fit(model: Module = None,
-        train_dataset: Dataset = None,
-        x: Union[ndarray, List] = None,
-        y: Union[ndarray, List] = None,
+def fit(model: torch.nn.Module = None,
+        train_dataset: torch.utils.data.Dataset = None,
+        x: Union[numpy.ndarray, List] = None,
+        y: Union[numpy.ndarray, List] = None,
         optimizer: Union[Optimizer, str] = None,
-        criterion: Union[Module, str] = None,
-        transform: transforms = None,
+        criterion: Union[torch.nn.Module, str] = None,
+        transform: torchvision.transforms = None,
         batch_size: int = None,
         epochs: int = 1,
         verbose: int = 1,
         print_acc: bool = True,
         callbacks: List = None,
-        validation_dataset: Dataset = None,
+        validation_dataset: torch.utils.data.Dataset = None,
         validation_split: float = 0.0,
-        validation_data:  List[ndarray] = None,
-        validation_transform: transforms = None,
+        validation_data:  List[numpy.ndarray] = None,
+        validation_transform: torchvision.transforms = None,
         shuffle: bool = True,
         initial_epoch: int = 0,
         steps_per_epoch: int = None,
@@ -56,7 +55,7 @@ def fit(model: Module = None,
             do_validation = True
             val_x, val_y = validation_data
             validation_dataset = new_dataset(val_x, val_y, validation_transform)
-            validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
+            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
         elif 0. < validation_split < 1. and validation_dataset is None:
             do_validation = True
             if hasattr(x[0], 'shape'):
@@ -66,21 +65,35 @@ def fit(model: Module = None,
             x, val_x = split_data(x, 0, split_at), split_data(x, split_at)
             y, val_y = split_data(y, 0, split_at), split_data(y, split_at)
             validation_dataset = new_dataset(val_x, val_y, validation_transform)
-            validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
+            validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
     else:
         do_validation = True
-        validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
+        validation_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=batch_size, shuffle=False, **kwargs)
 
     if train_dataset and x and y:
         warnings.warn('`dataset`, `x`, and `y` arguments all are not None, however fastorch will use dataset only!')
     elif train_dataset is None:
         train_dataset = new_dataset(x, y, transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, **kwargs)
 
     history = dict()
     for epoch in range(initial_epoch, epochs):
-        history[epoch] = {}
+        epoch_time = AverageMeter(name='epoch_time')
+        train_loss = AverageMeter(name='train_loss')
+        train_acc = AverageMeter(name='train_acc')
+
+        history[epoch] = {
+            'epoch_time': epoch_time,
+            'train_loss': train_loss,
+            'train_acc': train_acc
+        }
+
+        valid_loss = AverageMeter(name='validation_loss')
+        valid_acc = AverageMeter(name='validation_acc')
+        history[epoch]['validation_loss'] = valid_loss
+        history[epoch]['validation_acc'] = valid_acc
+
         start_time = time.time()
         trained_samples = 0
         if verbose != 0:
@@ -90,6 +103,7 @@ def fit(model: Module = None,
         for idx, (inputs, targets) in enumerate(train_loader):
             model.train()
             inputs, targets = inputs.to(device), targets.to(device)
+
             trained_samples += inputs.size(0)
 
             optimizer.zero_grad()
@@ -98,41 +112,41 @@ def fit(model: Module = None,
             loss.backward()
             optimizer.step()
 
-            batch_end_time = time.time()
-            batch_loss = loss.item()
-            history[epoch].setdefault('train_loss', [batch_loss, ]).append(batch_loss)
+            epoch_time.update(time.time() - start_time)
+            train_loss.update(loss.item())
+
             if print_acc:
                 pred = torch.max(out, 1)[1]
                 batch_acc = pred.eq(targets).sum().item() / pred.size(0)
-                history[epoch].setdefault('train_acc', [batch_acc, ]).append(batch_acc)
+                train_acc.update(batch_acc)
             else:
-                batch_acc = 0.0
+                train_acc.update(0.0)
             if do_validation:
-                valid_loss, valid_acc = evaluate(model=model, dataset=validation_dataset, dataloader=validation_loader,
+                batch_loss, batch_acc = evaluate(model=model, dataset=validation_dataset, dataloader=validation_loader,
                                                       batch_size=batch_size, verbose=0,
                                                       criterion=criterion, print_acc=print_acc, device=device)
-                history[epoch].setdefault('validation_loss', [valid_loss, ]).append(valid_loss)
-                history[epoch].setdefault('validation_acc', [valid_acc, ]).append(valid_acc)
+                valid_loss.update(batch_loss)
+                valid_acc.update(batch_acc)
             else:
-                valid_loss = None
-                valid_acc = None
+                valid_loss.update(None)
+                valid_acc.update(None)
 
             prog_bar.update()
-            console(prog_bar, verbose, trained_samples, len(train_dataset), idx + 1, len(train_loader),
-                          batch_end_time - start_time, batch_loss, batch_acc, valid_loss, valid_acc)
+            console(prog_bar, verbose, trained_samples, len(train_dataset), idx + 1, len(train_loader), epoch_time.val,
+                    train_loss.val, train_acc.val, valid_loss.val, valid_acc.val)
         print()
     return history
 
 
-def evaluate(model: Module = None,
-             dataset: Dataset = None,
-             dataloader: DataLoader = None,
-             x: Union[ndarray, List] = None,
-             y: Union[ndarray, List] = None,
-             transform: transforms = None,
+def evaluate(model: torch.nn.Module = None,
+             dataset: torch.utils.data.Dataset = None,
+             dataloader: torch.utils.data.DataLoader = None,
+             x: Union[numpy.ndarray, List] = None,
+             y: Union[numpy.ndarray, List] = None,
+             transform: torchvision.transforms = None,
              batch_size: int = None,
              verbose: int = 1,
-             criterion: Union[Module, str] = None,
+             criterion: Union[torch.nn.Module, str] = None,
              print_acc: bool = True,
              steps: int = None,
              device: str = None,
@@ -155,7 +169,7 @@ def evaluate(model: Module = None,
                 assert x and y, 'dataset and dataloader is None, make sure x and y are not None!'
                 dataset = new_dataset(x, y, transform)
 
-            dataloader = DataLoader(dataset, batch_size, shuffle=False, **kwargs)
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size, shuffle=False, **kwargs)
 
         criterion = get_objective(criterion)
 

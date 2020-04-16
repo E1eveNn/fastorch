@@ -1,5 +1,6 @@
 import utils
-import models
-import functional
+from .models import *
+from .functional import *
+
 
 name = 'fastorch'

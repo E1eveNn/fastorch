@@ -81,14 +81,14 @@ It's simple and straightforward, but is that enough? Below gives **fastorch reso
 
 ```python
 ################################# import dependencies ###############################
-import torch.nn as nn
+import torch
 import fastorch
 
 ################################# define your network ###############################
 '''
 inherit from fastorch in your own network
 '''
-class network(fastorch.models.Model, nn.Module):
+class network(fastorch.models.Model):
     def __init__(self):
         super(network, self).__init__()
         self.fc = nn.Sequential(
@@ -118,6 +118,7 @@ Y = torch.randint(0, 10, size=(5000,))
 #################################### run training ###################################
 net = network()
 net.fit(x=X, y=Y, optimizer='sgd', criterion='cross_entropy', batch_size=BATCH_SIZE, epochs=1, verbose=1)
+# you shall see this in console board
 '''
 Epoch[1/1]
  2100/5000 [========>***********] - 1s - 68ms/batch -batch_loss: 2.2993 -batch_acc: 0.1200
@@ -143,7 +144,7 @@ $ pip install fastorch
 
 ## Supports
 
-When using `fastorch.models.Model`, make sure your network is **inherited** from both `fastorch.models.Model` and `torch.nn.Module`.
+When using `fastorch.models.Model`, make sure your network is **inherited** from `fastorch.models.Model`.
 
 ### - fastorch.models.Model
 

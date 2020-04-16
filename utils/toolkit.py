@@ -35,6 +35,40 @@ class ProgressBar(object):
         return bar
 
 
+class AverageMeter(object):
+    def __init__(self, name=None, verbose=0):
+        self.name = name
+        self.val = None
+        self.avg = None
+        self.sums = None
+        self.steps = 0
+        self.verbose = verbose
+        self.reset()
+
+    def reset(self):
+        if self.verbose == 0:
+            self.val = 0.
+            self.avg = 0.
+            self.sums = 0.
+        else:
+            self.val = []
+            self.avg = []
+            self.sums = []
+
+    def update(self, val, step=1):
+        if val is None:
+            self.val = None
+            return
+        self.steps += step
+        if self.verbose == 0:
+            self.val = val
+            self.sums += val * step
+            self.avg = self.sums / self.steps
+        else:
+            self.val.append(val)
+            self.sums.append(self.sums[-1] + val * step)
+            self.avg.append(self.sums[-1] / self.steps)
+
 
 def split_data(arrays, start=0, end=None):
     arrays = np.array(arrays)
